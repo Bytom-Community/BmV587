@@ -4,6 +4,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"log"
+	"os"
+	"strings"
 
 	"github.com/bytom/common"
 	"github.com/bytom/consensus"
@@ -12,17 +15,38 @@ import (
 	"github.com/bytom/errors"
 )
 
-var netParams = &consensus.TestNetParams
+var netParams = &consensus.MainNetParams
 
 func main() {
-	str, _ := genAddress("c256affcc54cfae619dcbb9494cccce3a605e2f743bf53977891c51efe10764cb62271e0a0247a7253175c2d8799893288a8da5f26ed151ef7a2f0ac15657282", 1, 1)
-	fmt.Println(str)
+	if len(os.Args) <= 2 {
+		log.Fatal("Please specify the pubkey & suffix.")
+	}
+
+	pubkey := os.Args[1]
+	suffix := os.Args[2]
+	for i := uint64(0); i <= ^uint64(0); i++ {
+		for j := uint64(0); j <= ^uint64(0); j++ {
+			address, path, err := genAddress(pubkey, i, j)
+			if err != nil {
+				continue
+			}
+
+			if strings.HasSuffix(address, suffix) {
+				var pathStr []string
+				for _, p := range path {
+					pathStr = append(pathStr, hex.EncodeToString(p))
+				}
+
+				fmt.Printf("%s: accountIdx %d, addressIdx: %d, path: %v\n", address, i, j, pathStr)
+			}
+		}
+	}
 }
 
-func genAddress(pubkey string, accountIdx uint64, addressIdx uint64) (string, error) {
+func genAddress(pubkey string, accountIdx uint64, addressIdx uint64) (string, [][]byte, error) {
 	xPub, err := stringToXPub(pubkey)
 	if err != nil {
-		return "", errors.Wrap(err, "stringToXPub")
+		return "", nil, errors.Wrap(err, "stringToXPub")
 	}
 
 	path := pathForAddress(accountIdx, addressIdx)
@@ -32,10 +56,10 @@ func genAddress(pubkey string, accountIdx uint64, addressIdx uint64) (string, er
 
 	address, err := common.NewAddressWitnessPubKeyHash(pubHash, netParams)
 	if err != nil {
-		return "", errors.Wrap(err, "NewAddressWitnessPubKeyHash")
+		return "", nil, errors.Wrap(err, "NewAddressWitnessPubKeyHash")
 	}
 
-	return address.EncodeAddress(), nil
+	return address.EncodeAddress(), path, nil
 }
 
 func stringToXPub(xPubStr string) (*chainkd.XPub, error) {
